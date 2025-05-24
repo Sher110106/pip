@@ -1,0 +1,101 @@
+# Base configuration for Python Dependency Resolver
+# For more details on configuration: https://developers.cloudflare.com/workers/wrangler/configuration/
+
+name = "python-dependency-resolver"
+main = "src/server.ts"
+compatibility_date = "2025-02-11"
+compatibility_flags = [
+  "nodejs_compat",
+  "nodejs_compat_populate_process_env"
+]
+
+[assets]
+directory = "public"
+
+# Durable Objects Configuration
+[[durable_objects.bindings]]
+name = "DependencyResolverAgent"
+class_name = "DependencyResolverAgent"
+
+[[durable_objects.bindings]]
+name = "PackageResearchAgent"
+class_name = "PackageResearchAgent"
+
+[[durable_objects.bindings]]
+name = "ReportGeneratorAgent"
+class_name = "ReportGeneratorAgent"
+
+# Durable Object Migrations
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = [
+  "DependencyResolverAgent",
+  "PackageResearchAgent", 
+  "ReportGeneratorAgent"
+]
+
+# KV Namespace for Caching
+[[kv_namespaces]]
+binding = "PACKAGE_CACHE"
+id = "8be9e71b70f64814a63dfc2e5fca9a4b"
+preview_id = "1d90a32224c546cdbded570ace8ec5b7"
+
+# R2 Bucket for Report Storage
+[[r2_buckets]]
+binding = "REPORTS_STORAGE"
+bucket_name = "dependency-reports"
+
+# Observability
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# Base Environment Variables
+[vars]
+ENVIRONMENT = "development"
+LOG_LEVEL = "debug"
+
+# Production Environment
+[env.production]
+vars = { ENVIRONMENT = "production", LOG_LEVEL = "info" }
+
+# Production needs its own bindings since they don't inherit
+[[env.production.durable_objects.bindings]]
+name = "DependencyResolverAgent"
+class_name = "DependencyResolverAgent"
+
+[[env.production.durable_objects.bindings]]
+name = "PackageResearchAgent"
+class_name = "PackageResearchAgent"
+
+[[env.production.durable_objects.bindings]]
+name = "ReportGeneratorAgent"
+class_name = "ReportGeneratorAgent"
+
+[[env.production.kv_namespaces]]
+binding = "PACKAGE_CACHE"
+id = "8be9e71b70f64814a63dfc2e5fca9a4b"
+
+[[env.production.r2_buckets]]
+binding = "REPORTS_STORAGE"
+bucket_name = "dependency-reports"
+
+[env.production.observability]
+enabled = true
+head_sampling_rate = 0.1
+
+# Staging Environment
+[env.staging]
+vars = { ENVIRONMENT = "staging", LOG_LEVEL = "debug" }
+
+[env.staging.observability]
+enabled = true
+head_sampling_rate = 0.5
+
+# Development Environment (local)
+[env.development]
+vars = { ENVIRONMENT = "development", LOG_LEVEL = "debug" }
+
+[env.development.observability]
+enabled = true
+head_sampling_rate = 1 

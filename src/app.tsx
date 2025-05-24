@@ -1,370 +1,198 @@
-import { useEffect, useState, useRef, useCallback, use } from "react";
-import { useAgent } from "agents/react";
-import { useAgentChat } from "agents/ai-react";
-import type { Message } from "@ai-sdk/react";
-import type { tools } from "./tools";
-
-// Component imports
-import { Button } from "@/components/button/Button";
-import { Card } from "@/components/card/Card";
-import { Avatar } from "@/components/avatar/Avatar";
-import { Toggle } from "@/components/toggle/Toggle";
-import { Textarea } from "@/components/textarea/Textarea";
-import { MemoizedMarkdown } from "@/components/memoized-markdown";
-import { ToolInvocationCard } from "@/components/tool-invocation-card/ToolInvocationCard";
-
-// Icon imports
+import { useState, useCallback } from "react";
 import {
-  Bug,
-  Moon,
-  Robot,
-  Sun,
-  Trash,
-  PaperPlaneTilt,
-  Stop,
-} from "@phosphor-icons/react";
+  parseRequirementString,
+  type ResolutionRequest,
+  type DependencyReport,
+} from "./shared";
 
-// List of tools that require human confirmation
-const toolsRequiringConfirmation: (keyof typeof tools)[] = [
-  "getWeatherInformation",
-];
+// Import new sections
+import HeroSection from "./components/home/hero-section";
+import GitHubIntegrationSection from "./components/home/github-integration-section";
+import LiveDemoSection from "./components/home/live-demo-section";
+import BenefitsSection from "./components/home/benefits-section";
 
-export default function Chat() {
-  const [theme, setTheme] = useState<"dark" | "light">(() => {
-    // Check localStorage first, default to dark if not found
-    const savedTheme = localStorage.getItem("theme");
-    return (savedTheme as "dark" | "light") || "dark";
-  });
-  const [showDebug, setShowDebug] = useState(false);
-  const [textareaHeight, setTextareaHeight] = useState("auto");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+// Add custom CSS animations
+const customStyles = `
+  @keyframes gradient-x {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  
+  .animate-gradient-x {
+    background-size: 200% 200%;
+    animation: gradient-x 3s ease infinite;
+  }
+  
+  .bg-300\\% {
+    background-size: 300% 300%;
+  }
+`;
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, []);
+// Inject styles
+if (typeof document !== 'undefined') {
+  const styleElement = document.createElement('style');
+  styleElement.textContent = customStyles;
+  document.head.appendChild(styleElement);
+}
 
-  useEffect(() => {
-    // Apply theme class on mount and when theme changes
-    if (theme === "dark") {
-      document.documentElement.classList.add("dark");
-      document.documentElement.classList.remove("light");
-    } else {
-      document.documentElement.classList.remove("dark");
-      document.documentElement.classList.add("light");
-    }
+interface DependencyInputProps {
+  onSubmit: (request: ResolutionRequest) => void;
+  isProcessing: boolean;
+}
 
-    // Save theme preference to localStorage
-    localStorage.setItem("theme", theme);
-  }, [theme]);
+function DependencyInput({ onSubmit, isProcessing }: DependencyInputProps) {
+  const [requirements, setRequirements] = useState(
+    "numpy>=1.19.0\npandas>=1.3.0\ndjango==3.2.5"
+  );
+  const [pythonVersion, setPythonVersion] = useState("3.9");
+  const [allowPrereleases, setAllowPrereleases] = useState(false);
+  const [excludeDeprecated, setExcludeDeprecated] = useState(true);
 
-  // Scroll to bottom on mount
-  useEffect(() => {
-    scrollToBottom();
-  }, [scrollToBottom]);
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
 
-  const toggleTheme = () => {
-    const newTheme = theme === "dark" ? "light" : "dark";
-    setTheme(newTheme);
-  };
+      try {
+        const parsedRequirements = requirements
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line && !line.startsWith("#"))
+          .map((line) => parseRequirementString(line));
 
-  const agent = useAgent({
-    agent: "chat",
-  });
+        const request: ResolutionRequest = {
+          requirements: parsedRequirements,
+          python_version: pythonVersion,
+          allow_prereleases: allowPrereleases,
+          prefer_stable: true,
+          exclude_deprecated: excludeDeprecated,
+          suggest_alternatives: true,
+        };
 
-  const {
-    messages: agentMessages,
-    input: agentInput,
-    handleInputChange: handleAgentInputChange,
-    handleSubmit: handleAgentSubmit,
-    addToolResult,
-    clearHistory,
-    isLoading,
-    stop,
-  } = useAgentChat({
-    agent,
-    maxSteps: 5,
-  });
-
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    agentMessages.length > 0 && scrollToBottom();
-  }, [agentMessages, scrollToBottom]);
-
-  const pendingToolCallConfirmation = agentMessages.some((m: Message) =>
-    m.parts?.some(
-      (part) =>
-        part.type === "tool-invocation" &&
-        part.toolInvocation.state === "call" &&
-        toolsRequiringConfirmation.includes(
-          part.toolInvocation.toolName as keyof typeof tools
-        )
-    )
+        onSubmit(request);
+      } catch (error) {
+        alert(
+          `Error parsing requirements: ${error instanceof Error ? error.message : "Unknown error"}`
+        );
+      }
+    },
+    [requirements, pythonVersion, allowPrereleases, excludeDeprecated, onSubmit]
   );
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
-
   return (
-    <div className="h-[100vh] w-full p-4 flex justify-center items-center bg-fixed overflow-hidden">
-      <HasOpenAIKey />
-      <div className="h-[calc(100vh-2rem)] w-full mx-auto max-w-lg flex flex-col shadow-xl rounded-md overflow-hidden relative border border-neutral-300 dark:border-neutral-800">
-        <div className="px-4 py-3 border-b border-neutral-300 dark:border-neutral-800 flex items-center gap-3 sticky top-0 z-10">
-          <div className="flex items-center justify-center h-8 w-8">
-            <svg
-              width="28px"
-              height="28px"
-              className="text-[#F48120]"
-              data-icon="agents"
-            >
-              <title>Cloudflare Agents</title>
-              <symbol id="ai:local:agents" viewBox="0 0 80 79">
-                <path
-                  fill="currentColor"
-                  d="M69.3 39.7c-3.1 0-5.8 2.1-6.7 5H48.3V34h4.6l4.5-2.5c1.1.8 2.5 1.2 3.9 1.2 3.8 0 7-3.1 7-7s-3.1-7-7-7-7 3.1-7 7c0 .9.2 1.8.5 2.6L51.9 30h-3.5V18.8h-.1c-1.3-1-2.9-1.6-4.5-1.9h-.2c-1.9-.3-3.9-.1-5.8.6-.4.1-.8.3-1.2.5h-.1c-.1.1-.2.1-.3.2-1.7 1-3 2.4-4 4 0 .1-.1.2-.1.2l-.3.6c0 .1-.1.1-.1.2v.1h-.6c-2.9 0-5.7 1.2-7.7 3.2-2.1 2-3.2 4.8-3.2 7.7 0 .7.1 1.4.2 2.1-1.3.9-2.4 2.1-3.2 3.5s-1.2 2.9-1.4 4.5c-.1 1.6.1 3.2.7 4.7s1.5 2.9 2.6 4c-.8 1.8-1.2 3.7-1.1 5.6 0 1.9.5 3.8 1.4 5.6s2.1 3.2 3.6 4.4c1.3 1 2.7 1.7 4.3 2.2v-.1q2.25.75 4.8.6h.1c0 .1.1.1.1.1.9 1.7 2.3 3 4 4 .1.1.2.1.3.2h.1c.4.2.8.4 1.2.5 1.4.6 3 .8 4.5.7.4 0 .8-.1 1.3-.1h.1c1.6-.3 3.1-.9 4.5-1.9V62.9h3.5l3.1 1.7c-.3.8-.5 1.7-.5 2.6 0 3.8 3.1 7 7 7s7-3.1 7-7-3.1-7-7-7c-1.5 0-2.8.5-3.9 1.2l-4.6-2.5h-4.6V48.7h14.3c.9 2.9 3.5 5 6.7 5 3.8 0 7-3.1 7-7s-3.1-7-7-7m-7.9-16.9c1.6 0 3 1.3 3 3s-1.3 3-3 3-3-1.3-3-3 1.4-3 3-3m0 41.4c1.6 0 3 1.3 3 3s-1.3 3-3 3-3-1.3-3-3 1.4-3 3-3M44.3 72c-.4.2-.7.3-1.1.3-.2 0-.4.1-.5.1h-.2c-.9.1-1.7 0-2.6-.3-1-.3-1.9-.9-2.7-1.7-.7-.8-1.3-1.7-1.6-2.7l-.3-1.5v-.7q0-.75.3-1.5c.1-.2.1-.4.2-.7s.3-.6.5-.9c0-.1.1-.1.1-.2.1-.1.1-.2.2-.3s.1-.2.2-.3c0 0 0-.1.1-.1l.6-.6-2.7-3.5c-1.3 1.1-2.3 2.4-2.9 3.9-.2.4-.4.9-.5 1.3v.1c-.1.2-.1.4-.1.6-.3 1.1-.4 2.3-.3 3.4-.3 0-.7 0-1-.1-2.2-.4-4.2-1.5-5.5-3.2-1.4-1.7-2-3.9-1.8-6.1q.15-1.2.6-2.4l.3-.6c.1-.2.2-.4.3-.5 0 0 0-.1.1-.1.4-.7.9-1.3 1.5-1.9 1.6-1.5 3.8-2.3 6-2.3q1.05 0 2.1.3v-4.5c-.7-.1-1.4-.2-2.1-.2-1.8 0-3.5.4-5.2 1.1-.7.3-1.3.6-1.9 1s-1.1.8-1.7 1.3c-.3.2-.5.5-.8.8-.6-.8-1-1.6-1.3-2.6-.2-1-.2-2 0-2.9.2-1 .6-1.9 1.3-2.6.6-.8 1.4-1.4 2.3-1.8l1.8-.9-.7-1.9c-.4-1-.5-2.1-.4-3.1s.5-2.1 1.1-2.9q.9-1.35 2.4-2.1c.9-.5 2-.8 3-.7.5 0 1 .1 1.5.2 1 .2 1.8.7 2.6 1.3s1.4 1.4 1.8 2.3l4.1-1.5c-.9-2-2.3-3.7-4.2-4.9q-.6-.3-.9-.6c.4-.7 1-1.4 1.6-1.9.8-.7 1.8-1.1 2.9-1.3.9-.2 1.7-.1 2.6 0 .4.1.7.2 1.1.3V72zm25-22.3c-1.6 0-3-1.3-3-3 0-1.6 1.3-3 3-3s3 1.3 3 3c0 1.6-1.3 3-3 3"
-                />
-              </symbol>
-              <use href="#ai:local:agents" />
-            </svg>
-          </div>
-
-          <div className="flex-1">
-            <h2 className="font-semibold text-base">AI Chat Agent</h2>
-          </div>
-
-          <div className="flex items-center gap-2 mr-2">
-            <Bug size={16} />
-            <Toggle
-              toggled={showDebug}
-              aria-label="Toggle debug mode"
-              onClick={() => setShowDebug((prev) => !prev)}
-            />
-          </div>
-
-          <Button
-            variant="ghost"
-            size="md"
-            shape="square"
-            className="rounded-full h-9 w-9"
-            onClick={toggleTheme}
-          >
-            {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="md"
-            shape="square"
-            className="rounded-full h-9 w-9"
-            onClick={clearHistory}
-          >
-            <Trash size={20} />
-          </Button>
-        </div>
-
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24 max-h-[calc(100vh-10rem)]">
-          {agentMessages.length === 0 && (
-            <div className="h-full flex items-center justify-center">
-              <Card className="p-6 max-w-md mx-auto bg-neutral-100 dark:bg-neutral-900">
-                <div className="text-center space-y-4">
-                  <div className="bg-[#F48120]/10 text-[#F48120] rounded-full p-3 inline-flex">
-                    <Robot size={24} />
-                  </div>
-                  <h3 className="font-semibold text-lg">Welcome to AI Chat</h3>
-                  <p className="text-muted-foreground text-sm">
-                    Start a conversation with your AI assistant. Try asking
-                    about:
-                  </p>
-                  <ul className="text-sm text-left space-y-2">
-                    <li className="flex items-center gap-2">
-                      <span className="text-[#F48120]">•</span>
-                      <span>Weather information for any city</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="text-[#F48120]">•</span>
-                      <span>Local time in different locations</span>
-                    </li>
-                  </ul>
-                </div>
-              </Card>
+    <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-3xl overflow-hidden shadow-2xl">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-blue-600/20 via-purple-600/20 to-indigo-600/20 px-8 py-6 border-b border-gray-700/50">
+        <div className="text-center">
+          <div className="flex justify-center mb-4">
+            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center shadow-xl">
+              <span className="text-3xl">🐍</span>
             </div>
-          )}
-
-          {agentMessages.map((m: Message, index) => {
-            const isUser = m.role === "user";
-            const showAvatar =
-              index === 0 || agentMessages[index - 1]?.role !== m.role;
-
-            return (
-              <div key={m.id}>
-                {showDebug && (
-                  <pre className="text-xs text-muted-foreground overflow-scroll">
-                    {JSON.stringify(m, null, 2)}
-                  </pre>
-                )}
-                <div
-                  className={`flex ${isUser ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`flex gap-2 max-w-[85%] ${
-                      isUser ? "flex-row-reverse" : "flex-row"
-                    }`}
-                  >
-                    {showAvatar && !isUser ? (
-                      <Avatar username={"AI"} />
-                    ) : (
-                      !isUser && <div className="w-8" />
-                    )}
-
-                    <div>
-                      <div>
-                        {m.parts?.map((part, i) => {
-                          if (part.type === "text") {
-                            return (
-                              // biome-ignore lint/suspicious/noArrayIndexKey: immutable index
-                              <div key={i}>
-                                <Card
-                                  className={`p-3 rounded-md bg-neutral-100 dark:bg-neutral-900 ${
-                                    isUser
-                                      ? "rounded-br-none"
-                                      : "rounded-bl-none border-assistant-border"
-                                  } ${
-                                    part.text.startsWith("scheduled message")
-                                      ? "border-accent/50"
-                                      : ""
-                                  } relative`}
-                                >
-                                  {part.text.startsWith(
-                                    "scheduled message"
-                                  ) && (
-                                    <span className="absolute -top-3 -left-2 text-base">
-                                      🕒
-                                    </span>
-                                  )}
-                                  <MemoizedMarkdown
-                                    id={`${m.id}-${i}`}
-                                    content={part.text.replace(
-                                      /^scheduled message: /,
-                                      ""
-                                    )}
-                                  />
-                                </Card>
-                                <p
-                                  className={`text-xs text-muted-foreground mt-1 ${
-                                    isUser ? "text-right" : "text-left"
-                                  }`}
-                                >
-                                  {formatTime(
-                                    new Date(m.createdAt as unknown as string)
-                                  )}
-                                </p>
-                              </div>
-                            );
-                          }
-
-                          if (part.type === "tool-invocation") {
-                            const toolInvocation = part.toolInvocation;
-                            const toolCallId = toolInvocation.toolCallId;
-                            const needsConfirmation =
-                              toolsRequiringConfirmation.includes(
-                                toolInvocation.toolName as keyof typeof tools
-                              );
-
-                            // Skip rendering the card in debug mode
-                            if (showDebug) return null;
-
-                            return (
-                              <ToolInvocationCard
-                                // biome-ignore lint/suspicious/noArrayIndexKey: using index is safe here as the array is static
-                                key={`${toolCallId}-${i}`}
-                                toolInvocation={toolInvocation}
-                                toolCallId={toolCallId}
-                                needsConfirmation={needsConfirmation}
-                                addToolResult={addToolResult}
-                              />
-                            );
-                          }
-                          return null;
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          <div ref={messagesEndRef} />
+          </div>
+          <h2 className="text-3xl font-bold text-white mb-2">
+            Try It Yourself
+          </h2>
+          <p className="text-gray-300 text-lg">
+            Experience the full power of our dependency resolver
+          </p>
         </div>
+      </div>
 
-        {/* Input Area */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleAgentSubmit(e, {
-              data: {
-                annotations: {
-                  hello: "world",
-                },
-              },
-            });
-            setTextareaHeight("auto"); // Reset height after submission
-          }}
-          className="p-3 bg-neutral-50 absolute bottom-0 left-0 right-0 z-10 border-t border-neutral-300 dark:border-neutral-800 dark:bg-neutral-900"
-        >
-          <div className="flex items-center gap-2">
-            <div className="flex-1 relative">
-              <Textarea
-                disabled={pendingToolCallConfirmation}
-                placeholder={
-                  pendingToolCallConfirmation
-                    ? "Please respond to the tool confirmation above..."
-                    : "Send a message..."
-                }
-                className="flex w-full border border-neutral-200 dark:border-neutral-700 px-3 py-2 text-base ring-offset-background placeholder:text-neutral-500 dark:placeholder:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-300 dark:focus-visible:ring-neutral-700 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm min-h-[24px] max-h-[calc(75dvh)] overflow-hidden resize-none rounded-2xl !text-base pb-10 dark:bg-neutral-900"
-                value={agentInput}
-                onChange={(e) => {
-                  handleAgentInputChange(e);
-                  // Auto-resize the textarea
-                  e.target.style.height = "auto";
-                  e.target.style.height = `${e.target.scrollHeight}px`;
-                  setTextareaHeight(`${e.target.scrollHeight}px`);
-                }}
-                onKeyDown={(e) => {
-                  if (
-                    e.key === "Enter" &&
-                    !e.shiftKey &&
-                    !e.nativeEvent.isComposing
-                  ) {
-                    e.preventDefault();
-                    handleAgentSubmit(e as unknown as React.FormEvent);
-                    setTextareaHeight("auto"); // Reset height on Enter submission
-                  }
-                }}
-                rows={2}
-                style={{ height: textareaHeight }}
-              />
-              <div className="absolute bottom-0 right-0 p-2 w-fit flex flex-row justify-end">
-                {isLoading ? (
-                  <button
-                    type="button"
-                    onClick={stop}
-                    className="inline-flex items-center cursor-pointer justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 rounded-full p-1.5 h-fit border border-neutral-200 dark:border-neutral-800"
-                    aria-label="Stop generation"
-                  >
-                    <Stop size={16} />
-                  </button>
+      {/* Form Content */}
+      <div className="p-8">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label
+              htmlFor="requirements"
+              className="block text-sm font-semibold text-white mb-3"
+            >
+              📦 Requirements (one per line)
+            </label>
+            <textarea
+              id="requirements"
+              value={requirements}
+              onChange={(e) => setRequirements(e.target.value)}
+              className="w-full h-40 p-4 border-2 border-gray-600 rounded-xl resize-none font-mono text-sm text-gray-200 bg-gray-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 focus:bg-gray-700 transition-all duration-200"
+              placeholder="numpy>=1.19.0&#10;pandas>=1.3.0&#10;django==3.2.5"
+              disabled={isProcessing}
+            />
+            <p className="text-xs text-gray-400 mt-2 flex items-center">
+              <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+              Supports pip requirement format (e.g., package&gt;=1.0.0, package==2.1.3)
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label
+                htmlFor="python-version"
+                className="block text-sm font-semibold text-white mb-2"
+              >
+                🐍 Python Version
+              </label>
+              <select
+                id="python-version"
+                value={pythonVersion}
+                onChange={(e) => setPythonVersion(e.target.value)}
+                className="w-full p-3 border-2 border-gray-600 rounded-xl text-gray-200 bg-gray-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all duration-200"
+                disabled={isProcessing}
+              >
+                <option value="3.8">Python 3.8</option>
+                <option value="3.9">Python 3.9</option>
+                <option value="3.10">Python 3.10</option>
+                <option value="3.11">Python 3.11</option>
+                <option value="3.12">Python 3.12</option>
+              </select>
+            </div>
+
+            <div className="flex items-center justify-center">
+              <label className="flex items-center cursor-pointer bg-gray-800/50 rounded-xl p-3 hover:bg-gray-700/50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={allowPrereleases}
+                  onChange={(e) => setAllowPrereleases(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+                  disabled={isProcessing}
+                />
+                <span className="ml-3 text-sm font-medium text-white">
+                  🧪 Allow prereleases
+                </span>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-center">
+              <label className="flex items-center cursor-pointer bg-gray-800/50 rounded-xl p-3 hover:bg-gray-700/50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={excludeDeprecated}
+                  onChange={(e) => setExcludeDeprecated(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+                  disabled={isProcessing}
+                />
+                <span className="ml-3 text-sm font-medium text-white">
+                  ⚠️ Exclude deprecated
+                </span>
+              </label>
+            </div>
+
+            <div className="flex items-center">
+              <button
+                type="submit"
+                disabled={isProcessing || !requirements.trim()}
+                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-6 rounded-xl hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+              >
+                {isProcessing ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Resolving...
+                  </span>
                 ) : (
-                  <button
-                    type="submit"
-                    className="inline-flex items-center cursor-pointer justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 rounded-full p-1.5 h-fit border border-neutral-200 dark:border-neutral-800"
-                    disabled={pendingToolCallConfirmation || !agentInput.trim()}
-                    aria-label="Send message"
-                  >
-                    <PaperPlaneTilt size={16} />
-                  </button>
+                  "🔍 Resolve Dependencies"
                 )}
-              </div>
+              </button>
             </div>
           </div>
         </form>
@@ -373,76 +201,493 @@ export default function Chat() {
   );
 }
 
-const hasOpenAiKeyPromise = fetch("/check-open-ai-key").then((res) =>
-  res.json<{ success: boolean }>()
-);
+interface ResolutionResultsProps {
+  report: DependencyReport | null;
+  isLoading: boolean;
+  error: string | null;
+  onRetry: () => void;
+}
 
-function HasOpenAIKey() {
-  const hasOpenAiKey = use(hasOpenAiKeyPromise);
+function ResolutionResults({
+  report,
+  isLoading,
+  error,
+  onRetry,
+}: ResolutionResultsProps) {
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "requirements" | "details"
+  >("overview");
 
-  if (!hasOpenAiKey.success) {
+  if (isLoading) {
     return (
-      <div className="fixed top-0 left-0 right-0 z-50 bg-red-500/10 backdrop-blur-sm">
-        <div className="max-w-3xl mx-auto p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-lg border border-red-200 dark:border-red-900 p-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
-                <svg
-                  className="w-5 h-5 text-red-600 dark:text-red-400"
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-labelledby="warningIcon"
-                >
-                  <title id="warningIcon">Warning Icon</title>
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="8" x2="12" y2="12" />
-                  <line x1="12" y1="16" x2="12.01" y2="16" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-red-600 dark:text-red-400 mb-2">
-                  OpenAI API Key Not Configured
-                </h3>
-                <p className="text-neutral-600 dark:text-neutral-300 mb-1">
-                  Requests to the API, including from the frontend UI, will not
-                  work until an OpenAI API key is configured.
-                </p>
-                <p className="text-neutral-600 dark:text-neutral-300">
-                  Please configure an OpenAI API key by setting a{" "}
-                  <a
-                    href="https://developers.cloudflare.com/workers/configuration/secrets/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-red-600 dark:text-red-400"
-                  >
-                    secret
-                  </a>{" "}
-                  named{" "}
-                  <code className="bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 rounded text-red-600 dark:text-red-400 font-mono text-sm">
-                    OPENAI_API_KEY
-                  </code>
-                  . <br />
-                  You can also use a different model provider by following these{" "}
-                  <a
-                    href="https://github.com/cloudflare/agents-starter?tab=readme-ov-file#use-a-different-ai-model-provider"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-red-600 dark:text-red-400"
-                  >
-                    instructions.
-                  </a>
-                </p>
-              </div>
+      <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-3xl overflow-hidden shadow-2xl">
+        <div className="bg-gradient-to-r from-blue-600/20 via-purple-600/20 to-indigo-600/20 px-8 py-6 border-b border-gray-700/50">
+          <div className="text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-500/20 rounded-full mb-4">
+              <svg className="animate-spin h-8 w-8 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-2">Analyzing Dependencies</h3>
+            <p className="text-gray-300">Our AI is working hard to resolve your packages...</p>
+          </div>
+        </div>
+        <div className="p-8">
+          <div className="space-y-4">
+            <div className="animate-pulse">
+              <div className="h-4 bg-gray-700 rounded w-3/4"></div>
+            </div>
+            <div className="animate-pulse">
+              <div className="h-4 bg-gray-700 rounded w-1/2"></div>
+            </div>
+            <div className="animate-pulse">
+              <div className="h-4 bg-gray-700 rounded w-5/6"></div>
             </div>
           </div>
         </div>
       </div>
     );
   }
-  return null;
+
+  if (error) {
+    return (
+      <div className="bg-gradient-to-br from-red-900/20 to-red-800/20 backdrop-blur-sm border border-red-500/30 rounded-3xl overflow-hidden shadow-2xl">
+        <div className="bg-gradient-to-r from-red-600/20 to-red-500/20 px-8 py-6 border-b border-red-500/30">
+          <div className="text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-red-500/20 rounded-full mb-4">
+              <span className="text-3xl">❌</span>
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-2">Analysis Failed</h3>
+            <p className="text-red-200">Something went wrong during analysis</p>
+          </div>
+        </div>
+        <div className="p-8">
+          <div className="bg-red-900/30 border border-red-500/30 rounded-xl p-6 mb-6">
+            <p className="text-red-200 font-mono text-sm">{error}</p>
+          </div>
+          <div className="text-center">
+            <button
+              onClick={onRetry}
+              className="bg-gradient-to-r from-red-600 to-red-700 text-white py-3 px-8 rounded-xl hover:from-red-700 hover:to-red-800 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+            >
+              🔄 Try Again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!report) return null;
+
+  return (
+    <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-3xl overflow-hidden shadow-2xl">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-green-600/20 via-blue-600/20 to-purple-600/20 px-8 py-6 border-b border-gray-700/50">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-green-500/20 rounded-full mb-4">
+            <span className="text-3xl">✅</span>
+          </div>
+          <h3 className="text-2xl font-bold text-white mb-2">Analysis Complete</h3>
+          <p className="text-gray-300">Your dependency analysis is ready</p>
+        </div>
+      </div>
+
+      {/* Navigation Tabs */}
+      <div className="border-b border-gray-700/50">
+        <nav className="flex space-x-8 px-8">
+          {[
+            { key: "overview", label: "📊 Overview", icon: "📊" },
+            { key: "requirements", label: "📄 Requirements", icon: "📄" },
+            { key: "details", label: "📋 Details", icon: "📋" },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key as any)}
+              className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === tab.key
+                  ? "border-blue-500 text-blue-400"
+                  : "border-transparent text-gray-400 hover:text-gray-300"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Content */}
+      <div className="p-8">
+        {activeTab === "overview" && (
+          <div className="space-y-8">
+            {/* Summary Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="bg-green-900/20 border border-green-500/30 rounded-xl p-6 text-center">
+                <div className="text-3xl font-bold text-green-400 mb-2">
+                  {report.result.resolved_packages?.length || 0}
+                </div>
+                <div className="text-gray-300 text-sm">Resolved Packages</div>
+              </div>
+              <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-xl p-6 text-center">
+                <div className="text-3xl font-bold text-yellow-400 mb-2">
+                  {report.result.deprecated_packages?.length || 0}
+                </div>
+                <div className="text-gray-300 text-sm">Deprecated Packages</div>
+              </div>
+              <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-6 text-center">
+                <div className="text-3xl font-bold text-red-400 mb-2">
+                  {report.result.conflicts?.length || 0}
+                </div>
+                <div className="text-gray-300 text-sm">Conflicts</div>
+              </div>
+              <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-6 text-center">
+                <div className="text-3xl font-bold text-blue-400 mb-2">
+                  {report.metadata?.processing_time_ms || 0}ms
+                </div>
+                <div className="text-gray-300 text-sm">Processing Time</div>
+              </div>
+            </div>
+
+            {/* Resolved Packages */}
+            {report.result.resolved_packages && report.result.resolved_packages.length > 0 && (
+              <div className="bg-gray-800/30 border border-gray-700/30 rounded-xl p-6">
+                <h4 className="text-xl font-semibold text-white mb-4 flex items-center">
+                  <span className="mr-2">✅</span>
+                  Resolved Packages ({report.result.resolved_packages.length})
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {report.result.resolved_packages.map((pkg: { name: string; version: string }, index: number) => (
+                    <div
+                      key={index}
+                      className="bg-gray-900/50 border border-gray-600/30 rounded-lg p-4"
+                    >
+                      <div className="font-mono text-green-400 font-medium">
+                        {pkg.name}
+                      </div>
+                      <div className="text-gray-300 text-sm">
+                        Version: <span className="text-blue-400">{pkg.version}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Deprecated Packages */}
+            {report.result.deprecated_packages && report.result.deprecated_packages.length > 0 && (
+              <div className="bg-yellow-900/10 border border-yellow-500/20 rounded-xl p-6">
+                <h4 className="text-xl font-semibold text-white mb-4 flex items-center">
+                  <span className="mr-2">⚠️</span>
+                  Deprecated Packages ({report.result.deprecated_packages.length})
+                </h4>
+                <div className="space-y-4">
+                  {report.result.deprecated_packages.map((pkg: { name: string; version: string; reason: string; suggested_alternative?: string }, index: number) => (
+                    <div
+                      key={index}
+                      className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="font-mono text-yellow-400 font-medium">
+                          {pkg.name}
+                        </span>
+                        <span className="text-gray-400 text-sm">{pkg.version}</span>
+                      </div>
+                      <p className="text-gray-300 text-sm mb-2">{pkg.reason}</p>
+                      {pkg.suggested_alternative && (
+                        <div className="text-sm">
+                          <span className="text-blue-400">💡 Alternative: </span>
+                          <span className="text-gray-300">
+                            {pkg.suggested_alternative}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "requirements" && (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h4 className="text-xl font-semibold text-white flex items-center">
+                <span className="mr-2">📄</span>
+                Requirements.txt
+              </h4>
+              <button
+                onClick={() => navigator.clipboard.writeText(report.requirements_txt)}
+                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-6 rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 text-sm font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+              >
+                📋 Copy to Clipboard
+              </button>
+            </div>
+            <div className="bg-gray-900 rounded-xl overflow-hidden border border-gray-700/50">
+              <div className="bg-gray-800 px-4 py-2 flex items-center border-b border-gray-700/50">
+                <div className="flex space-x-2 mr-4">
+                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                </div>
+                <span className="text-gray-300 text-sm font-mono">requirements.txt</span>
+              </div>
+              <pre className="text-green-400 p-6 overflow-x-auto text-sm font-mono leading-relaxed">
+                {report.requirements_txt}
+              </pre>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "details" && (
+          <div>
+            <h4 className="text-xl font-semibold text-white mb-6 flex items-center">
+              <span className="mr-2">📋</span>
+              Detailed Analysis Report
+            </h4>
+            <div className="bg-gray-800/30 rounded-xl p-6 border border-gray-700/30">
+              <div
+                className="prose max-w-none text-gray-300"
+                dangerouslySetInnerHTML={{
+                  __html: report.detailed_report
+                    .replace(/\n/g, "<br/>")
+                    .replace(/\*\*(.+?)\*\*/g, "<strong class='text-white'>$1</strong>")
+                    .replace(/\*(.+?)\*/g, "<em class='text-gray-400'>$1</em>")
+                    .replace(/#{1,6}\s(.+)/g, "<h3 class='text-lg font-semibold text-white mt-4 mb-2'>$1</h3>"),
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="border-t border-gray-700/50 px-8 py-4 bg-gray-800/30">
+        <div className="flex flex-wrap justify-between items-center text-sm text-gray-400">
+          <span className="flex items-center">
+            <span className="mr-1">🐍</span>
+            Python {report.metadata.python_version}
+          </span>
+          <span className="flex items-center">
+            <span className="mr-1">⚡</span>
+            Processed in {report.metadata.processing_time_ms}ms
+          </span>
+          <span className="font-mono text-xs bg-gray-700 px-2 py-1 rounded">
+            ID: {report.id}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  const [currentReport, setCurrentReport] = useState<DependencyReport | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastRequest, setLastRequest] = useState<ResolutionRequest | null>(null);
+
+  // Handle dependency resolution with correct URL
+  const handleResolutionRequest = useCallback(
+    async (request: ResolutionRequest) => {
+      setIsProcessing(true);
+      setError(null);
+      setCurrentReport(null);
+      setLastRequest(request);
+
+      try {
+        // Submit resolution request using correct kebab-case URL
+        const response = await fetch(
+          "/agents/dependency-resolver-agent/resolve",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(request),
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Resolution request failed: ${response.statusText}`);
+        }
+
+        const result = (await response.json()) as {
+          id: string;
+          status: string;
+          message: string;
+        };
+
+        // Poll for results with correct URL pattern
+        const pollForResults = async () => {
+          try {
+            const statusResponse = await fetch(
+              `/agents/dependency-resolver-agent/status?id=${result.id}`
+            );
+            
+            if (!statusResponse.ok) {
+              throw new Error("Failed to check status");
+            }
+
+            const statusData = (await statusResponse.json()) as any;
+
+            if ("error" in statusData) {
+              setError(statusData.error as string);
+              setIsProcessing(false);
+            } else if ("result" in statusData) {
+              setCurrentReport(statusData as DependencyReport);
+              setIsProcessing(false);
+            } else {
+              // Still processing, continue polling
+              setTimeout(pollForResults, 2000);
+            }
+          } catch (err) {
+            setError(
+              err instanceof Error ? err.message : "Unknown error occurred"
+            );
+            setIsProcessing(false);
+          }
+        };
+
+        // Start polling after a short delay
+        setTimeout(pollForResults, 1000);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unknown error occurred");
+        setIsProcessing(false);
+      }
+    },
+    []
+  );
+
+  // Retry function
+  const handleRetry = useCallback(() => {
+    if (lastRequest) {
+      handleResolutionRequest(lastRequest);
+    }
+  }, [lastRequest, handleResolutionRequest]);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-pink-50">
+      {/* Hero Section */}
+      <HeroSection />
+
+      {/* GitHub Integration Section */}
+      <GitHubIntegrationSection />
+
+      {/* Live Demo Section */}
+      <LiveDemoSection />
+
+      {/* Benefits Section */}
+      <BenefitsSection />
+
+      {/* Interactive Demo Section */}
+      <div id="demo-section" className="py-24 bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
+        <div className="container mx-auto px-6 max-w-7xl">
+          <div className="text-center mb-20">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl shadow-xl mb-8">
+              <span className="text-4xl">🚀</span>
+            </div>
+            <h2 className="text-5xl lg:text-6xl font-black mb-6">
+              <span className="bg-gradient-to-r from-orange-600 via-amber-600 to-yellow-600 bg-clip-text text-transparent">
+                Full Featured Demo
+              </span>
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
+              Use the complete dependency resolver with all features, real AI analysis, 
+              <br className="hidden lg:block" />
+              and <span className="text-orange-600">detailed reporting</span>
+            </p>
+          </div>
+
+          <div className="space-y-16">
+            <DependencyInput
+              onSubmit={handleResolutionRequest}
+              isProcessing={isProcessing}
+            />
+
+            <ResolutionResults
+              report={currentReport}
+              isLoading={isProcessing}
+              error={error}
+              onRetry={handleRetry}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="py-20 bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 border-t border-emerald-200">
+        <div className="container mx-auto px-6 text-center">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex justify-center mb-12">
+              <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 via-teal-500 to-green-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-emerald-500/30 border border-emerald-300">
+                <span className="text-4xl">🐍</span>
+              </div>
+            </div>
+            <h3 className="text-4xl font-bold text-gray-800 mb-6">
+              Ready to Transform Your 
+              <br className="hidden lg:block" />
+              <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 bg-clip-text text-transparent">
+                Development Workflow?
+              </span>
+            </h3>
+            <p className="text-xl text-gray-600 mb-12 leading-relaxed">
+              Join thousands of developers who trust our AI-powered dependency analysis platform
+              <br className="hidden lg:block" />
+              <span className="text-emerald-600">Start analyzing today</span> – it's completely free to get started
+            </p>
+            <div className="flex flex-col sm:flex-row gap-6 justify-center mb-16">
+              <button className="group relative px-10 py-5 bg-gradient-to-r from-emerald-600 via-teal-600 to-green-700 text-white font-bold rounded-2xl hover:shadow-2xl hover:shadow-emerald-500/30 transition-all duration-300 transform hover:scale-105 text-lg">
+                <span className="relative z-10 flex items-center gap-3">
+                  <span>🚀</span>
+                  Get Started Free
+                  <span className="group-hover:translate-x-1 transition-transform duration-300">→</span>
+                </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-emerald-700 via-teal-700 to-green-800 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              </button>
+              
+              <button className="group px-10 py-5 border-2 border-emerald-300 text-emerald-700 font-bold rounded-2xl hover:border-emerald-400 hover:text-emerald-800 hover:bg-emerald-50 transition-all duration-300 transform hover:scale-105 text-lg backdrop-blur-sm">
+                <span className="flex items-center gap-3">
+                  <span>💬</span>
+                  Contact Sales
+                </span>
+              </button>
+            </div>
+
+            {/* Additional Features Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+              <div className="bg-white/80 backdrop-blur-lg border border-emerald-200 rounded-2xl p-6 hover:border-emerald-300 transition-all duration-300">
+                <div className="text-3xl mb-4">📈</div>
+                <h4 className="text-gray-800 font-bold mb-2">Enterprise Ready</h4>
+                <p className="text-gray-600 text-sm">Scale to thousands of repositories with team management and enterprise integrations</p>
+              </div>
+              <div className="bg-white/80 backdrop-blur-lg border border-teal-200 rounded-2xl p-6 hover:border-teal-300 transition-all duration-300">
+                <div className="text-3xl mb-4">🔌</div>
+                <h4 className="text-gray-800 font-bold mb-2">Easy Integration</h4>
+                <p className="text-gray-600 text-sm">Works with your existing tools: GitHub, GitLab, CI/CD pipelines, and more</p>
+              </div>
+              <div className="bg-white/80 backdrop-blur-lg border border-green-200 rounded-2xl p-6 hover:border-green-300 transition-all duration-300">
+                <div className="text-3xl mb-4">⚡</div>
+                <h4 className="text-gray-800 font-bold mb-2">Lightning Fast</h4>
+                <p className="text-gray-600 text-sm">Get results in milliseconds with our global edge computing infrastructure</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="pt-12 border-t border-emerald-200 text-gray-500">
+            <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+              <p className="text-sm">
+                <span className="text-emerald-600">Powered by AI</span> • Built with ❤️ for Python developers • 
+                <span className="text-teal-600">Deployed on Cloudflare Workers</span>
+              </p>
+              <div className="flex items-center gap-6 text-sm">
+                <a href="#" className="text-gray-500 hover:text-emerald-600 transition-colors">Privacy Policy</a>
+                <a href="#" className="text-gray-500 hover:text-emerald-600 transition-colors">Terms of Service</a>
+                <a href="#" className="text-gray-500 hover:text-emerald-600 transition-colors">Documentation</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }

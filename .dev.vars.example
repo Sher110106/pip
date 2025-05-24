@@ -1,3 +1,36 @@
-OPENAI_API_KEY=sk-proj-1234567890
-# Optional - Cloudflare AI Gateway https://developers.cloudflare.com/ai-gateway/
-# GATEWAY_BASE_URL=https://gateway.ai.cloudflare.com/v1/..
+# Example environment variables for local development
+# Copy this file to .dev.vars and fill in your actual values
+
+# AI Provider Configuration (Required)
+# Choose ONE of the following:
+
+# Option 1: OpenAI
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Option 2: Azure OpenAI
+# AZURE_OPENAI_API_KEY=your_azure_openai_api_key
+# AZURE_OPENAI_RESOURCE_NAME=your_azure_resource_name
+# AZURE_OPENAI_DEPLOYMENT_NAME=your_deployment_name
+
+# Optional: Cloudflare AI Gateway (for caching and rate limiting)
+# CLOUDFLARE_ACCOUNT_ID=your_cloudflare_account_id
+# CLOUDFLARE_GATEWAY_ID=your_ai_gateway_id
+
+# Optional: Web Search (for enhanced deprecation detection)
+# GOOGLE_SEARCH_API_KEY=your_google_search_api_key
+# GOOGLE_SEARCH_ENGINE_ID=your_custom_search_engine_id
+
+# GitHub App Configuration (New!)
+GITHUB_APP_ID=your_github_app_id
+GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\nYOUR_PRIVATE_KEY_HERE\n-----END RSA PRIVATE KEY-----"
+GITHUB_WEBHOOK_SECRET=your_webhook_secret
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
+
+# Optional: GitHub Enterprise Server
+# GITHUB_ENTERPRISE_HOST=your-github-enterprise-hostname.com
+
+# Application Configuration
+BASE_URL=http://localhost:5173
+ENVIRONMENT=development
+LOG_LEVEL=debug 

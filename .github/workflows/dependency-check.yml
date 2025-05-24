@@ -1,0 +1,489 @@
+name: Python Dependency Check
+
+on:
+  pull_request:
+    paths:
+      - '**/requirements*.txt'
+      - '**/pyproject.toml'
+      - '**/setup.py'
+      - '**/Pipfile'
+  push:
+    branches: [main, master]
+    paths:
+      - '**/requirements*.txt'
+      - '**/pyproject.toml'
+      - '**/setup.py'
+      - '**/Pipfile'
+  workflow_dispatch:
+    inputs:
+      requirements_file:
+        description: 'Path to requirements file'
+        required: false
+        default: 'requirements.txt'
+      python_version:
+        description: 'Python version to check against'
+        required: false
+        default: '3.9'
+
+jobs:
+  dependency-analysis:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      checks: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ github.event.inputs.python_version || '3.9' }}
+      
+      - name: Find requirements files
+        id: find-files
+        run: |
+          echo "Finding Python dependency files..."
+          
+          # Find all requirements files
+          requirements_files=$(find . -name "requirements*.txt" -type f | head -10)
+          pyproject_files=$(find . -name "pyproject.toml" -type f | head -5)
+          setup_files=$(find . -name "setup.py" -type f | head -5)
+          pipfiles=$(find . -name "Pipfile" -type f | head -5)
+          
+          # Create JSON array of files
+          files_json="["
+          first=true
+          
+          for file in $requirements_files $pyproject_files $setup_files $pipfiles; do
+            if [ "$first" = true ]; then
+              first=false
+            else
+              files_json="$files_json,"
+            fi
+            files_json="$files_json\"$file\""
+          done
+          files_json="$files_json]"
+          
+          echo "files=$files_json" >> $GITHUB_OUTPUT
+          echo "Found files: $files_json"
+      
+      - name: Extract requirements from files
+        id: extract-requirements
+        run: |
+          python3 << 'EOF'
+          import json
+          import os
+          import re
+          import sys
+          
+          def parse_requirements_txt(file_path):
+              """Parse requirements.txt format"""
+              requirements = []
+              try:
+                  with open(file_path, 'r') as f:
+                      for line in f:
+                          line = line.strip()
+                          if line and not line.startswith('#') and not line.startswith('-'):
+                              # Basic requirement parsing
+                              req = line.split('#')[0].strip()
+                              if req:
+                                  requirements.append(req)
+              except Exception as e:
+                  print(f"Error parsing {file_path}: {e}")
+              return requirements
+          
+          def parse_setup_py(file_path):
+              """Basic setup.py parsing"""
+              requirements = []
+              try:
+                  with open(file_path, 'r') as f:
+                      content = f.read()
+                      # Look for install_requires
+                      import_match = re.search(r'install_requires\s*=\s*\[(.*?)\]', content, re.DOTALL)
+                      if import_match:
+                          reqs_text = import_match.group(1)
+                          for req in re.findall(r'["\']([^"\']+)["\']', reqs_text):
+                              requirements.append(req)
+              except Exception as e:
+                  print(f"Error parsing {file_path}: {e}")
+              return requirements
+          
+          # Get files from previous step
+          files_json = os.environ.get('FILES', '[]')
+          files = json.loads(files_json)
+          
+          all_requirements = []
+          file_requirements = {}
+          
+          for file_path in files:
+              if not os.path.exists(file_path):
+                  continue
+                  
+              requirements = []
+              if file_path.endswith('.txt'):
+                  requirements = parse_requirements_txt(file_path)
+              elif file_path.endswith('setup.py'):
+                  requirements = parse_setup_py(file_path)
+              # Add more parsers for pyproject.toml, Pipfile, etc.
+              
+              if requirements:
+                  file_requirements[file_path] = requirements
+                  all_requirements.extend(requirements)
+          
+          # Remove duplicates while preserving order
+          unique_requirements = []
+          seen = set()
+          for req in all_requirements:
+              if req not in seen:
+                  unique_requirements.append(req)
+                  seen.add(req)
+          
+          # Output for next step
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"requirements={json.dumps(unique_requirements)}\n")
+              f.write(f"file_requirements={json.dumps(file_requirements)}\n")
+          
+          print(f"Found {len(unique_requirements)} unique requirements across {len(file_requirements)} files")
+          for file_path, reqs in file_requirements.items():
+              print(f"{file_path}: {len(reqs)} requirements")
+          EOF
+        env:
+          FILES: ${{ steps.find-files.outputs.files }}
+      
+      - name: Analyze dependencies with Python Dependency Resolver
+        id: analyze
+        run: |
+          python3 << 'EOF'
+          import json
+          import os
+          import time
+          import urllib.request
+          import urllib.parse
+          
+          # Configuration
+          BASE_URL = "https://python-dependency-resolver.example.workers.dev"  # Replace with your actual URL
+          PYTHON_VERSION = "${{ github.event.inputs.python_version || '3.9' }}"
+          
+          # Get requirements from previous step
+          requirements_json = os.environ.get('REQUIREMENTS', '[]')
+          requirements_list = json.loads(requirements_json)
+          
+          if not requirements_list:
+              print("No requirements found to analyze")
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write("analysis_result={}\n")
+              exit(0)
+          
+          # Parse requirements into the expected format
+          parsed_requirements = []
+          for req_str in requirements_list:
+              # Basic parsing - split on operators
+              import re
+              match = re.match(r'([a-zA-Z0-9_\-\.]+)([><=!]+)?([0-9\.]+.*)?', req_str.strip())
+              if match:
+                  name = match.group(1)
+                  operator = match.group(2) or ""
+                  version = match.group(3) or ""
+                  
+                  parsed_requirements.append({
+                      "name": name,
+                      "operator": operator,
+                      "version": version,
+                      "original_spec": req_str
+                  })
+              else:
+                  # Fallback for simple package names
+                  parsed_requirements.append({
+                      "name": req_str.strip(),
+                      "operator": "",
+                      "version": "",
+                      "original_spec": req_str
+                  })
+          
+          # Prepare analysis request
+          analysis_request = {
+              "requirements": parsed_requirements,
+              "python_version": PYTHON_VERSION,
+              "allow_prereleases": False,
+              "exclude_deprecated": True,
+              "suggest_alternatives": True
+          }
+          
+          print(f"Analyzing {len(parsed_requirements)} requirements for Python {PYTHON_VERSION}")
+          
+          try:
+              # Start analysis
+              req_data = json.dumps(analysis_request).encode('utf-8')
+              req = urllib.request.Request(
+                  f"{BASE_URL}/agents/dependency-resolver-agent/resolve",
+                  data=req_data,
+                  headers={'Content-Type': 'application/json'}
+              )
+              
+              with urllib.request.urlopen(req) as response:
+                  resolve_response = json.loads(response.read().decode())
+              
+              resolve_id = resolve_response.get('id')
+              if not resolve_id:
+                  raise Exception("No resolve ID returned")
+              
+              print(f"Analysis started with ID: {resolve_id}")
+              
+              # Poll for results
+              max_attempts = 30
+              for attempt in range(max_attempts):
+                  time.sleep(2)
+                  
+                  status_req = urllib.request.Request(
+                      f"{BASE_URL}/agents/dependency-resolver-agent/status?id={resolve_id}"
+                  )
+                  
+                  with urllib.request.urlopen(status_req) as response:
+                      status_response = json.loads(response.read().decode())
+                  
+                  if status_response.get('status') == 'completed':
+                      analysis_result = status_response.get('result', {})
+                      
+                      # Output the result
+                      with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                          f.write(f"analysis_result={json.dumps(analysis_result)}\n")
+                          f.write(f"analysis_success=true\n")
+                      
+                      print("Analysis completed successfully")
+                      break
+                  elif status_response.get('status') == 'failed':
+                      error_msg = status_response.get('error', 'Unknown error')
+                      print(f"Analysis failed: {error_msg}")
+                      with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                          f.write(f"analysis_result={{\"error\": \"{error_msg}\"}}\n")
+                          f.write(f"analysis_success=false\n")
+                      break
+                  else:
+                      print(f"Attempt {attempt + 1}/{max_attempts}: Status is {status_response.get('status', 'unknown')}")
+              else:
+                  print("Analysis timed out")
+                  with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                      f.write(f"analysis_result={{\"error\": \"Analysis timed out\"}}\n")
+                      f.write(f"analysis_success=false\n")
+          
+          except Exception as e:
+              print(f"Error during analysis: {e}")
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write(f"analysis_result={{\"error\": \"{str(e)}\"}}\n")
+                  f.write(f"analysis_success=false\n")
+          EOF
+        env:
+          REQUIREMENTS: ${{ steps.extract-requirements.outputs.requirements }}
+      
+      - name: Create analysis report
+        id: create-report
+        run: |
+          python3 << 'EOF'
+          import json
+          import os
+          
+          # Get analysis result
+          analysis_json = os.environ.get('ANALYSIS_RESULT', '{}')
+          analysis = json.loads(analysis_json)
+          
+          # Get file requirements for context
+          file_requirements_json = os.environ.get('FILE_REQUIREMENTS', '{}')
+          file_requirements = json.loads(file_requirements_json)
+          
+          # Build markdown report
+          report = "# 🐍 Python Dependency Analysis Report\n\n"
+          
+          if analysis.get('error'):
+              report += f"❌ **Analysis Failed**: {analysis['error']}\n\n"
+          elif analysis.get('success'):
+              report += "✅ **Analysis completed successfully**\n\n"
+              
+              # Summary
+              resolved = analysis.get('resolved_packages', [])
+              deprecated = analysis.get('deprecated_packages', [])
+              conflicts = analysis.get('conflicts', [])
+              warnings = analysis.get('warnings', [])
+              
+              report += f"## 📊 Summary\n\n"
+              report += f"- **Total packages analyzed**: {len(resolved)}\n"
+              report += f"- **Deprecated packages**: {len(deprecated)}\n"
+              report += f"- **Conflicts detected**: {len(conflicts)}\n"
+              report += f"- **Warnings**: {len(warnings)}\n\n"
+              
+              # Files analyzed
+              if file_requirements:
+                  report += "## 📁 Files Analyzed\n\n"
+                  for file_path, reqs in file_requirements.items():
+                      report += f"- `{file_path}`: {len(reqs)} requirements\n"
+                  report += "\n"
+              
+              # Deprecated packages
+              if deprecated:
+                  report += "## ⚠️ Deprecated Packages\n\n"
+                  for pkg in deprecated:
+                      report += f"### {pkg['name']} v{pkg['version']}\n"
+                      report += f"**Reason**: {pkg['reason']}\n"
+                      if pkg.get('suggested_alternative'):
+                          report += f"**💡 Suggested alternative**: `{pkg['suggested_alternative']}`\n"
+                      report += "\n"
+              
+              # Conflicts
+              if conflicts:
+                  report += "## ❌ Version Conflicts\n\n"
+                  for conflict in conflicts:
+                      report += f"### {', '.join(conflict['packages'])}\n"
+                      report += f"**Issue**: {conflict['reason']}\n"
+                      if conflict.get('suggested_resolution'):
+                          report += f"**💡 Resolution**: {conflict['suggested_resolution']}\n"
+                      report += "\n"
+              
+              # Warnings
+              if warnings:
+                  report += "## ⚠️ Warnings\n\n"
+                  for warning in warnings:
+                      report += f"- {warning}\n"
+                  report += "\n"
+              
+              # All resolved packages (limit to 20 for readability)
+              if resolved:
+                  report += f"## 📦 Resolved Packages ({len(resolved)} total)\n\n"
+                  for pkg in resolved[:20]:
+                      report += f"- **{pkg['name']}**: `{pkg['version']}`\n"
+                  if len(resolved) > 20:
+                      report += f"- ... and {len(resolved) - 20} more packages\n"
+                  report += "\n"
+          else:
+              report += "❓ **Analysis status unknown**\n\n"
+          
+          report += "---\n"
+          report += f"*Generated by [Python Dependency Resolver](https://github.com/your-org/python-dependency-resolver) • Python {os.environ.get('PYTHON_VERSION', '3.9')}*"
+          
+          # Save report to file
+          with open('dependency-analysis-report.md', 'w') as f:
+              f.write(report)
+          
+          # Also output key metrics for further processing
+          success = analysis.get('success', False)
+          deprecated_count = len(analysis.get('deprecated_packages', []))
+          conflicts_count = len(analysis.get('conflicts', []))
+          warnings_count = len(analysis.get('warnings', []))
+          
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"success={success}\n")
+              f.write(f"deprecated_count={deprecated_count}\n")
+              f.write(f"conflicts_count={conflicts_count}\n")
+              f.write(f"warnings_count={warnings_count}\n")
+              f.write(f"report_file=dependency-analysis-report.md\n")
+          
+          print(f"Report generated: {success=}, {deprecated_count=}, {conflicts_count=}, {warnings_count=}")
+          EOF
+        env:
+          ANALYSIS_RESULT: ${{ steps.analyze.outputs.analysis_result }}
+          FILE_REQUIREMENTS: ${{ steps.extract-requirements.outputs.file_requirements }}
+          PYTHON_VERSION: ${{ github.event.inputs.python_version || '3.9' }}
+      
+      - name: Upload analysis report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-analysis-report
+          path: dependency-analysis-report.md
+          retention-days: 30
+      
+      - name: Comment on PR (if pull request)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Read the report file
+            const reportPath = '${{ steps.create-report.outputs.report_file }}';
+            const report = fs.readFileSync(reportPath, 'utf8');
+            
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const existingComment = comments.find(comment => 
+              comment.body.includes('🐍 Python Dependency Analysis Report')
+            );
+            
+            if (existingComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: report
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: report
+              });
+            }
+      
+      - name: Create check run
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const success = '${{ steps.create-report.outputs.success }}' === 'true';
+            const deprecatedCount = parseInt('${{ steps.create-report.outputs.deprecated_count }}') || 0;
+            const conflictsCount = parseInt('${{ steps.create-report.outputs.conflicts_count }}') || 0;
+            const warningsCount = parseInt('${{ steps.create-report.outputs.warnings_count }}') || 0;
+            
+            let conclusion = 'success';
+            let title = '✅ All dependencies look good!';
+            let summary = 'No issues found with your Python dependencies.';
+            
+            if (!success) {
+              conclusion = 'failure';
+              title = '❌ Dependency analysis failed';
+              summary = 'Could not complete dependency analysis. Check the logs for details.';
+            } else if (conflictsCount > 0) {
+              conclusion = 'failure';
+              title = `❌ ${conflictsCount} dependency conflicts found`;
+              summary = `Found ${conflictsCount} version conflicts that need to be resolved.`;
+            } else if (deprecatedCount > 0) {
+              conclusion = 'neutral';
+              title = `⚠️ ${deprecatedCount} deprecated packages found`;
+              summary = `Found ${deprecatedCount} deprecated packages. Consider updating to recommended alternatives.`;
+            } else if (warningsCount > 0) {
+              conclusion = 'neutral';
+              title = `⚠️ ${warningsCount} warnings found`;
+              summary = `Found ${warningsCount} warnings that should be reviewed.`;
+            }
+            
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Python Dependency Analysis',
+              head_sha: context.sha,
+              status: 'completed',
+              conclusion: conclusion,
+              output: {
+                title: title,
+                summary: summary,
+                text: `### Analysis Results\n- Deprecated packages: ${deprecatedCount}\n- Version conflicts: ${conflictsCount}\n- Warnings: ${warningsCount}\n\nSee the full report in the artifacts or PR comments.`
+              }
+            });
+      
+      - name: Fail if critical issues found
+        if: steps.create-report.outputs.conflicts_count != '0'
+        run: |
+          echo "❌ Critical dependency conflicts found that must be resolved"
+          echo "Conflicts: ${{ steps.create-report.outputs.conflicts_count }}"
+          exit 1 

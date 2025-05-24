@@ -1,127 +1,234 @@
-import { routeAgentRequest, type Schedule } from "agents";
+import { routeAgentRequest } from "agents";
+import { getAIClient } from "./services";
+import type { Env } from "./shared";
+import { createLogger, createMetrics } from "./logger";
+import { GitHubAppService, getGitHubAppConfig } from "./services/github-app";
 
-import { unstable_getSchedulePrompt } from "agents/schedule";
-
-import { AIChatAgent } from "agents/ai-chat-agent";
-import {
-  createDataStreamResponse,
-  generateId,
-  streamText,
-  type StreamTextOnFinishCallback,
-  type ToolSet,
-} from "ai";
-import { openai } from "@ai-sdk/openai";
-import { processToolCalls } from "./utils";
-import { tools, executions } from "./tools";
-// import { env } from "cloudflare:workers";
-
-const model = openai("gpt-4o-2024-11-20");
-// Cloudflare AI Gateway
-// const openai = createOpenAI({
-//   apiKey: env.OPENAI_API_KEY,
-//   baseURL: env.GATEWAY_BASE_URL,
-// });
+// Import and re-export agent classes for the agents framework
+export { DependencyResolverAgent } from "./agents/dependency-resolver-agent";
+export { PackageResearchAgent } from "./agents/package-research-agent";
+export { ReportGeneratorAgent } from "./agents/report-generator-agent";
 
 /**
- * Chat Agent implementation that handles real-time AI chat interactions
- */
-export class Chat extends AIChatAgent<Env> {
-  /**
-   * Handles incoming chat messages and manages the response stream
-   * @param onFinish - Callback function executed when streaming completes
-   */
-
-  async onChatMessage(
-    onFinish: StreamTextOnFinishCallback<ToolSet>,
-    options?: { abortSignal?: AbortSignal }
-  ) {
-    // const mcpConnection = await this.mcp.connect(
-    //   "https://path-to-mcp-server/sse"
-    // );
-
-    // Collect all tools, including MCP tools
-    const allTools = {
-      ...tools,
-      ...this.mcp.unstable_getAITools(),
-    };
-
-    // Create a streaming response that handles both text and tool outputs
-    const dataStreamResponse = createDataStreamResponse({
-      execute: async (dataStream) => {
-        // Process any pending tool calls from previous messages
-        // This handles human-in-the-loop confirmations for tools
-        const processedMessages = await processToolCalls({
-          messages: this.messages,
-          dataStream,
-          tools: allTools,
-          executions,
-        });
-
-        // Stream the AI response using GPT-4
-        const result = streamText({
-          model,
-          system: `You are a helpful assistant that can do various tasks... 
-
-${unstable_getSchedulePrompt({ date: new Date() })}
-
-If the user asks to schedule a task, use the schedule tool to schedule the task.
-`,
-          messages: processedMessages,
-          tools: allTools,
-          onFinish: async (args) => {
-            onFinish(
-              args as Parameters<StreamTextOnFinishCallback<ToolSet>>[0]
-            );
-            // await this.mcp.closeConnection(mcpConnection.id);
-          },
-          onError: (error) => {
-            console.error("Error while streaming:", error);
-          },
-          maxSteps: 10,
-        });
-
-        // Merge the AI response stream with tool execution outputs
-        result.mergeIntoDataStream(dataStream);
-      },
-    });
-
-    return dataStreamResponse;
-  }
-  async executeTask(description: string, task: Schedule<string>) {
-    await this.saveMessages([
-      ...this.messages,
-      {
-        id: generateId(),
-        role: "user",
-        content: `Running scheduled task: ${description}`,
-        createdAt: new Date(),
-      },
-    ]);
-  }
-}
-
-/**
- * Worker entry point that routes incoming requests to the appropriate handler
+ * Worker entry point that routes incoming requests
  */
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    const logger = createLogger(env);
+    const metrics = createMetrics();
+
     const url = new URL(request.url);
 
-    if (url.pathname === "/check-open-ai-key") {
-      const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
+    // Health check
+    if (url.pathname === "/health") {
+      logger.info("Health check requested");
+      metrics.counter("health_check", 1);
       return Response.json({
-        success: hasOpenAIKey,
+        status: "healthy",
+        timestamp: new Date().toISOString(),
+        environment: env.ENVIRONMENT || "unknown",
+        features: {
+          ai_provider: env.AZURE_OPENAI_API_KEY ? "azure" : "openai",
+          github_app: !!(env.GITHUB_APP_ID && env.GITHUB_PRIVATE_KEY),
+          search_enabled: !!(env.GOOGLE_SEARCH_API_KEY && env.GOOGLE_SEARCH_ENGINE_ID),
+        },
       });
     }
-    if (!process.env.OPENAI_API_KEY) {
-      console.error(
-        "OPENAI_API_KEY is not set, don't forget to set it locally in .dev.vars, and use `wrangler secret bulk .dev.vars` to upload it to production"
+
+    // GitHub webhook handler
+    if (url.pathname === "/api/webhooks/github" && request.method === "POST") {
+      const githubConfig = getGitHubAppConfig(env);
+      
+      if (!githubConfig) {
+        logger.error("GitHub App not configured");
+        return Response.json(
+          { error: "GitHub App not configured" },
+          { status: 503 }
+        );
+      }
+
+      try {
+        const githubApp = new GitHubAppService(githubConfig, env);
+        
+        logger.info("Received GitHub webhook", {
+          event: request.headers.get("x-github-event"),
+          delivery: request.headers.get("x-github-delivery"),
+          hasSignature: !!request.headers.get("x-hub-signature-256"),
+        });
+
+        // Use the new webhook verification method
+        const result = await githubApp.verifyAndReceiveWebhook(request);
+
+        logger.info("GitHub webhook processed successfully", {
+          event: request.headers.get("x-github-event"),
+          delivery: request.headers.get("x-github-delivery"),
+          status: result.status,
+        });
+
+        return result;
+
+      } catch (error) {
+        logger.error("Error processing GitHub webhook", error as Error);
+        return Response.json(
+          { error: "Webhook processing failed" },
+          { status: 500 }
+        );
+      }
+    }
+
+    // API key check
+    if (url.pathname === "/check-api-keys") {
+      const hasOpenAI = !!(env.OPENAI_API_KEY || env.AZURE_OPENAI_API_KEY);
+      const hasSearch = !!(
+        env.GOOGLE_SEARCH_API_KEY && env.GOOGLE_SEARCH_ENGINE_ID
+      );
+      const hasGitHub = !!(env.GITHUB_APP_ID && env.GITHUB_PRIVATE_KEY);
+
+      logger.info("API key check requested", { hasOpenAI, hasSearch, hasGitHub });
+
+      return Response.json({
+        openai: hasOpenAI,
+        search: hasSearch,
+        github: hasGitHub,
+        provider: env.AZURE_OPENAI_API_KEY ? "azure" : "openai",
+      });
+    }
+
+    // Test bindings directly
+    if (url.pathname === "/test-bindings") {
+      logger.info("Testing bindings directly");
+      try {
+        // Test KV namespace
+        await env.PACKAGE_CACHE.put("test-key", "test-value", {
+          expirationTtl: 60,
+        });
+        const kvValue = await env.PACKAGE_CACHE.get("test-key");
+
+        // Test R2 bucket
+        await env.REPORTS_STORAGE.put(
+          "test-report.json",
+          JSON.stringify({ test: "data" })
+        );
+        const r2Object = await env.REPORTS_STORAGE.get("test-report.json");
+        const r2Content = r2Object ? await r2Object.text() : null;
+
+        return Response.json({
+          success: true,
+          tests: {
+            kv_write_read: kvValue === "test-value",
+            r2_write_read: r2Content === '{"test":"data"}',
+            kv_value: kvValue,
+            r2_content: r2Content,
+          },
+          bindings_available: {
+            package_cache: !!env.PACKAGE_CACHE,
+            reports_storage: !!env.REPORTS_STORAGE,
+            agent_namespace: !!env.DependencyResolverAgent,
+          },
+        });
+      } catch (error) {
+        logger.error("Bindings test failed", error as Error);
+        return Response.json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+      }
+    }
+
+    // Test Durable Object Agent directly
+    if (url.pathname === "/test-agent-direct") {
+      logger.info("Testing DependencyResolverAgent directly");
+      try {
+        // Get a reference to the DependencyResolverAgent Durable Object
+        const agentId = env.DependencyResolverAgent.idFromName("test-instance");
+        const agentStub = env.DependencyResolverAgent.get(agentId);
+        
+        // Test a simple health request
+        const testRequest = new Request("https://test.com/health", {
+          method: "GET",
+        });
+        
+        const response = await agentStub.fetch(testRequest);
+        const result = await response.text();
+        
+        return Response.json({
+          success: true,
+          agent_response_status: response.status,
+          agent_response_body: result,
+          message: "Agent direct test completed"
+        });
+      } catch (error) {
+        logger.error("Agent direct test failed", error as Error);
+        return Response.json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+      }
+    }
+
+    // AI client test endpoint
+    if (url.pathname === "/test-ai-client") {
+      try {
+        getAIClient(env); // Test AI client initialization
+        logger.info("AI client initialized successfully", {
+          provider: env.AZURE_OPENAI_API_KEY ? "azure" : "openai",
+        });
+        return Response.json({
+          success: true,
+          provider: env.AZURE_OPENAI_API_KEY ? "azure" : "openai",
+          message: "AI client initialized successfully"
+        });
+      } catch (error) {
+        logger.error("AI client test failed", error as Error);
+        return Response.json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }
+
+    // Check for required API keys
+    if (!(env.OPENAI_API_KEY || env.AZURE_OPENAI_API_KEY)) {
+      logger.error("No AI API key configured");
+      metrics.counter("configuration_error", 1, { type: "missing_api_key" });
+      return Response.json(
+        {
+          error: "AI service not configured",
+        },
+        { status: 503 }
       );
     }
-    return (
-      // Route the request to our agent or return 404 if not found
-      (await routeAgentRequest(request, env)) ||
-      new Response("Not found", { status: 404 })
-    );
+
+    // Route to agents
+    logger.debug("Routing request to agents", { pathname: url.pathname });
+    try {
+      const agentResponse = await routeAgentRequest(request, env);
+      if (agentResponse) {
+        logger.debug("Agent routing successful", { 
+          status: agentResponse.status,
+          pathname: url.pathname 
+        });
+        return agentResponse;
+      } else {
+        logger.warn("No agent route matched", { pathname: url.pathname });
+        return new Response("Not found", { status: 404 });
+      }
+    } catch (error) {
+      logger.error("Agent routing failed", error as Error, {
+        pathname: url.pathname,
+        method: request.method,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      metrics.counter("agent_routing_error", 1, { 
+        pathname: url.pathname, 
+        error_type: error instanceof Error ? error.constructor.name : "unknown" 
+      });
+      return Response.json({
+        error: "Internal server error during agent routing",
+        details: error instanceof Error ? error.message : "Unknown error",
+      }, { status: 500 });
+    }
   },
 } satisfies ExportedHandler<Env>;

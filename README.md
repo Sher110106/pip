@@ -1,242 +1,341 @@
-# 🤖 Chat Agent Starter Kit
+# Python Dependency Resolver
 
-![agents-header](https://github.com/user-attachments/assets/f6d99eeb-1803-4495-9c5e-3cf07a37b402)
+An AI-powered Python dependency resolution system built with Cloudflare Workers and specialized AI agents. This system intelligently resolves Python package dependencies while detecting deprecated packages, suggesting alternatives, and handling version conflicts.
 
-<a href="https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/agents-starter"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare"/></a>
+<div align="center">
 
-A starter template for building AI-powered chat agents using Cloudflare's Agent platform, powered by [`agents`](https://www.npmjs.com/package/agents). This project provides a foundation for creating interactive chat experiences with AI, complete with a modern UI and tool integration capabilities.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
+[![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)](https://reactjs.org/)
 
-## Features
+**[🚀 Live Demo](https://python-dependency-resolver.bugzer.workers.dev)** • **[📚 Documentation](./docs/)** • **[🐙 GitHub Integration](./docs/GITHUB_INTEGRATION.md)**
 
-- 💬 Interactive chat interface with AI
-- 🛠️ Built-in tool system with human-in-the-loop confirmation
-- 📅 Advanced task scheduling (one-time, delayed, and recurring via cron)
-- 🌓 Dark/Light theme support
-- ⚡️ Real-time streaming responses
-- 🔄 State management and chat history
-- 🎨 Modern, responsive UI
+</div>
 
-## Prerequisites
+## ✨ Features
 
-- Cloudflare account
-- OpenAI API key
+### 🧠 AI-Powered Analysis
+- **Intelligent Resolution**: Uses specialized AI agents for complex dependency resolution
+- **Deprecation Detection**: Automatically identifies deprecated packages and suggests modern alternatives
+- **Conflict Resolution**: Handles version conflicts with intelligent recommendations
+- **Security Analysis**: Identifies known vulnerabilities and maintenance status
 
-## Quick Start
+### 🔗 GitHub Integration
+- **Automated PR Analysis**: Get AI-powered dependency analysis comments on every pull request
+- **Status Checks**: Block deployments with critical dependency conflicts
+- **Real-time Notifications**: Instant feedback on deprecated packages and conflicts
+- **Zero Configuration**: Install the GitHub App once, works across all your repositories
 
-1. Create a new project:
+### 🏗️ Modern Architecture
+- **Edge Computing**: Runs on Cloudflare's global edge network for fast response times
+- **Multi-Agent System**: Specialized AI agents working together for different aspects of resolution
+- **Intelligent Caching**: KV storage for package information and R2 for reports
+- **Real-time UI**: React/TypeScript interface with live updates
+
+## 🚀 Quick Start
+
+### For Developers
 
 ```bash
-npx create-cloudflare@latest --template cloudflare/agents-starter
-```
-
-2. Install dependencies:
-
-```bash
+# Clone and setup
+git clone https://github.com/your-org/agents-starter.git
+cd agents-starter
 npm install
-```
 
-3. Set up your environment:
+# Configure environment
+cp .dev.vars.example .dev.vars
+# Edit .dev.vars with your API keys
 
-Create a `.dev.vars` file:
-
-```env
-OPENAI_API_KEY=your_openai_api_key
-```
-
-4. Run locally:
-
-```bash
+# Start development server
 npm start
 ```
 
-5. Deploy:
+### For API Users
 
 ```bash
-npm run deploy
+# Basic dependency resolution
+curl -X POST https://python-dependency-resolver.bugzer.workers.dev/agents/dependency-resolver-agent/resolve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requirements": [
+      {"name": "requests", "operator": ">=", "version": "2.25.0", "original_spec": "requests>=2.25.0"}
+    ],
+    "python_version": "3.9"
+  }'
 ```
 
-## Project Structure
+### For Teams (GitHub Integration)
+
+1. **Install GitHub App**: Visit our [GitHub App page](https://github.com/apps/python-dependency-analyzer)
+2. **Configure Repositories**: Select which repos to analyze
+3. **Automatic Analysis**: PRs with `requirements.txt` changes get automatic analysis
+
+## 📖 Documentation
+
+Our comprehensive documentation covers all aspects of the system:
+
+| Guide | Description | Audience |
+|-------|-------------|----------|
+| **[📚 Documentation Index](./docs/README.md)** | Complete documentation overview | All Users |
+| **[🔧 Development Guide](./docs/DEVELOPMENT.md)** | Setup, testing, and contribution guide | Developers |
+| **[📋 API Reference](./docs/API.md)** | Complete API documentation with examples | API Users |
+| **[🚀 Deployment Guide](./docs/DEPLOYMENT.md)** | Production deployment and infrastructure | DevOps |
+| **[🎨 Components](./docs/COMPONENTS.md)** | React component library documentation | Frontend Devs |
+| **[🐙 GitHub Integration](./docs/GITHUB_INTEGRATION.md)** | GitHub App setup and configuration | Teams |
+
+## 🏗️ Architecture
+
+```mermaid
+graph TB
+    A[Frontend React App] --> B[Cloudflare Worker]
+    B --> C[Dependency Resolver Agent]
+    B --> D[Package Research Agent]
+    B --> E[Report Generator Agent]
+    
+    C --> F[PyPI API]
+    D --> G[Google Search API]
+    D --> H[AI Provider]
+    E --> I[R2 Storage]
+    
+    B --> J[KV Cache]
+    B --> K[GitHub API]
+    
+    L[GitHub Webhooks] --> B
+```
+
+### System Components
+
+- **🤖 AI Agents**: Specialized agents for dependency resolution, package research, and report generation
+- **⚡ Cloudflare Workers**: Edge computing runtime for global performance
+- **🎨 React Frontend**: Modern TypeScript interface with Tailwind CSS
+- **💾 Smart Caching**: KV for package data, R2 for reports
+- **🔗 Integrations**: GitHub, PyPI, Google Search, AI providers
+
+## 🛠️ Technology Stack
+
+**Backend**
+- Cloudflare Workers (V8 isolates)
+- TypeScript + Durable Objects
+- Vercel AI SDK (OpenAI/Azure OpenAI)
+- Cloudflare KV + R2 Storage
+
+**Frontend**
+- React 19 + TypeScript
+- Tailwind CSS v4
+- Vite + Vitest
+- Radix UI + GSAP
+
+**DevOps**
+- Wrangler CLI
+- GitHub Actions
+- Biome + Prettier
+
+## 📋 Usage Examples
+
+### Web Interface
+
+1. **Visit the app**: [python-dependency-resolver.bugzer.workers.dev](https://python-dependency-resolver.bugzer.workers.dev)
+2. **Enter requirements**: Paste your Python requirements
+3. **Configure options**: Set Python version, preferences
+4. **Get results**: View analysis, requirements.txt, and detailed reports
+
+### API Integration
+
+```typescript
+// Resolve dependencies
+const response = await fetch('/agents/dependency-resolver-agent/resolve', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    requirements: [
+      { name: 'django', operator: '>=', version: '4.0', original_spec: 'django>=4.0' }
+    ],
+    python_version: '3.11',
+    exclude_deprecated: true
+  })
+});
+
+const { id, status } = await response.json();
+
+// Check status
+const statusResponse = await fetch(`/agents/dependency-resolver-agent/status?id=${id}`);
+const result = await statusResponse.json();
+```
+
+### GitHub Integration
+
+Once installed, the GitHub App automatically:
+
+- 🔍 **Analyzes** `requirements.txt` changes in PRs
+- 💬 **Comments** with detailed dependency analysis
+- ✅ **Status checks** for CI/CD integration
+- 🚨 **Alerts** on deprecated or vulnerable packages
+
+## 🔧 Development
+
+### Prerequisites
+
+- Node.js 18+
+- Cloudflare account with Workers plan
+- OpenAI or Azure OpenAI API key
+
+### Local Development
+
+```bash
+# Install dependencies
+npm install
+
+# Start development server (includes hot reloading)
+npm start
+
+# Run tests
+npm test
+
+# Deploy to development
+npm run deploy:dev
+```
+
+### Project Structure
 
 ```
+agents-starter/
 ├── src/
-│   ├── app.tsx        # Chat UI implementation
-│   ├── server.ts      # Chat agent logic
-│   ├── tools.ts       # Tool definitions
-│   ├── utils.ts       # Helper functions
-│   └── styles.css     # UI styling
+│   ├── agents/          # Durable Object agents
+│   ├── components/      # React UI components  
+│   ├── services/        # Business logic
+│   ├── app.tsx         # Main React app
+│   └── server.ts       # Worker entry point
+├── docs/               # Comprehensive documentation
+├── examples/           # Usage examples
+├── scripts/            # Setup scripts
+└── tests/              # Test files
 ```
 
-## Customization Guide
+## 🧪 Testing
 
-### Adding New Tools
+```bash
+# Run all tests
+npm test
 
-Add new tools in `tools.ts` using the tool builder:
+# Run with coverage
+npm run test:coverage
 
-```typescript
-// Example of a tool that requires confirmation
-const searchDatabase = tool({
-  description: "Search the database for user records",
-  parameters: z.object({
-    query: z.string(),
-    limit: z.number().optional(),
-  }),
-  // No execute function = requires confirmation
-});
+# Run specific test
+npm test -- dependency-resolver.test.ts
 
-// Example of an auto-executing tool
-const getCurrentTime = tool({
-  description: "Get current server time",
-  parameters: z.object({}),
-  execute: async () => new Date().toISOString(),
-});
-
-// Scheduling tool implementation
-const scheduleTask = tool({
-  description:
-    "schedule a task to be executed at a later time. 'when' can be a date, a delay in seconds, or a cron pattern.",
-  parameters: z.object({
-    type: z.enum(["scheduled", "delayed", "cron"]),
-    when: z.union([z.number(), z.string()]),
-    payload: z.string(),
-  }),
-  execute: async ({ type, when, payload }) => {
-    // ... see the implementation in tools.ts
-  },
-});
+# Watch mode
+npm run test:watch
 ```
 
-To handle tool confirmations, add execution functions to the `executions` object:
+## 🚀 Deployment
 
-```typescript
-export const executions = {
-  searchDatabase: async ({
-    query,
-    limit,
-  }: {
-    query: string;
-    limit?: number;
-  }) => {
-    // Implementation for when the tool is confirmed
-    const results = await db.search(query, limit);
-    return results;
-  },
-  // Add more execution handlers for other tools that require confirmation
-};
+### Production Deployment
+
+```bash
+# Deploy to production
+npm run deploy
+
+# Deploy with custom environment
+CLOUDFLARE_ENVIRONMENT=production npm run deploy
 ```
 
-Tools can be configured in two ways:
+### Environment Setup
 
-1. With an `execute` function for automatic execution
-2. Without an `execute` function, requiring confirmation and using the `executions` object to handle the confirmed action
+1. **Configure Cloudflare resources** (KV, R2, Durable Objects)
+2. **Set secrets** for API keys
+3. **Verify deployment** with health checks
 
-### Use a different AI model provider
+See the [Deployment Guide](./docs/DEPLOYMENT.md) for detailed instructions.
 
-The starting [`server.ts`](https://github.com/cloudflare/agents-starter/blob/main/src/server.ts) implementation uses the [`ai-sdk`](https://sdk.vercel.ai/docs/introduction) and the [OpenAI provider](https://sdk.vercel.ai/providers/ai-sdk-providers/openai), but you can use any AI model provider by:
+## 🔗 GitHub Integration Setup
 
-1. Installing an alternative AI provider for the `ai-sdk`, such as the [`workers-ai-provider`](https://sdk.vercel.ai/providers/community-providers/cloudflare-workers-ai) or [`anthropic`](https://sdk.vercel.ai/providers/ai-sdk-providers/anthropic) provider:
-2. Replacing the AI SDK with the [OpenAI SDK](https://github.com/openai/openai-node)
-3. Using the Cloudflare [Workers AI + AI Gateway](https://developers.cloudflare.com/ai-gateway/providers/workersai/#workers-binding) binding API directly
+### Quick Setup
 
-For example, to use the [`workers-ai-provider`](https://sdk.vercel.ai/providers/community-providers/cloudflare-workers-ai), install the package:
-
-```sh
-npm install workers-ai-provider
+```bash
+# Run the setup script
+chmod +x scripts/setup-github-integration.sh
+./scripts/setup-github-integration.sh
 ```
 
-Add an `ai` binding to `wrangler.jsonc`:
+### Manual Setup
 
-```jsonc
-// rest of file
-  "ai": {
-    "binding": "AI"
-  }
-// rest of file
+1. **Create GitHub App** with repository permissions
+2. **Configure webhook** endpoint
+3. **Install on repositories** you want to analyze
+4. **Set secrets** in Cloudflare Worker
+
+See the [GitHub Integration Guide](./docs/GITHUB_INTEGRATION.md) for complete setup.
+
+## 📊 Example Analysis
+
+### Input
+```
+django>=4.0
+requests>=2.25.0
+fabric==1.14.0
+numpy
 ```
 
-Replace the `@ai-sdk/openai` import and usage with the `workers-ai-provider`:
+### Output
+- ✅ **django>=4.0**: Current, well-maintained
+- ✅ **requests>=2.25.0**: Security update available (→ 2.28.1)
+- ⚠️ **fabric==1.14.0**: **DEPRECATED** → Use `fabric2` or `invoke`
+- ✅ **numpy**: Latest version resolved (1.24.3)
 
-```diff
-// server.ts
-// Change the imports
-- import { openai } from "@ai-sdk/openai";
-+ import { createWorkersAI } from 'workers-ai-provider';
+### Generated Requirements
+```txt
+# Generated by Python Dependency Analyzer
+# Python 3.11 compatible
+# Generated on 2024-01-15
 
-// Create a Workers AI instance
-+ const workersai = createWorkersAI({ binding: env.AI });
-
-// Use it when calling the streamText method (or other methods)
-// from the ai-sdk
-- const model = openai("gpt-4o-2024-11-20");
-+ const model = workersai("@cf/deepseek-ai/deepseek-r1-distill-qwen-32b")
+django==4.2.7
+requests==2.28.1
+# fabric==1.14.0  # DEPRECATED - consider fabric2 or invoke
+numpy==1.24.3
 ```
 
-Commit your changes and then run the `agents-starter` as per the rest of this README.
+## 🤝 Contributing
 
-### Modifying the UI
+We welcome contributions! Please see our [Development Guide](./docs/DEVELOPMENT.md) for:
 
-The chat interface is built with React and can be customized in `app.tsx`:
+- **Setup instructions**
+- **Coding standards**
+- **Testing guidelines**
+- **Pull request process**
 
-- Modify the theme colors in `styles.css`
-- Add new UI components in the chat container
-- Customize message rendering and tool confirmation dialogs
-- Add new controls to the header
+### Quick Contribution Steps
 
-### Example Use Cases
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
+3. **Commit** changes (`git commit -m 'Add amazing feature'`)
+4. **Push** to branch (`git push origin feature/amazing-feature`)
+5. **Open** a Pull Request
 
-1. **Customer Support Agent**
+## 📄 License
 
-   - Add tools for:
-     - Ticket creation/lookup
-     - Order status checking
-     - Product recommendations
-     - FAQ database search
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-2. **Development Assistant**
+## 🆘 Support
 
-   - Integrate tools for:
-     - Code linting
-     - Git operations
-     - Documentation search
-     - Dependency checking
+- **📚 Documentation**: [Complete guides](./docs/)
+- **🐛 Issues**: [GitHub Issues](https://github.com/your-org/agents-starter/issues)
+- **💬 Discussions**: [GitHub Discussions](https://github.com/your-org/agents-starter/discussions)
+- **📧 Contact**: [maintainers@example.com](mailto:maintainers@example.com)
 
-3. **Data Analysis Assistant**
+## 🌟 Acknowledgments
 
-   - Build tools for:
-     - Database querying
-     - Data visualization
-     - Statistical analysis
-     - Report generation
+- **Cloudflare Workers** for edge computing platform
+- **Vercel AI SDK** for AI integration
+- **PyPI** for package information
+- **React + TypeScript** for modern web development
 
-4. **Personal Productivity Assistant**
+---
 
-   - Implement tools for:
-     - Task scheduling with flexible timing options
-     - One-time, delayed, and recurring task management
-     - Task tracking with reminders
-     - Email drafting
-     - Note taking
+<div align="center">
 
-5. **Scheduling Assistant**
-   - Build tools for:
-     - One-time event scheduling using specific dates
-     - Delayed task execution (e.g., "remind me in 30 minutes")
-     - Recurring tasks using cron patterns
-     - Task payload management
-     - Flexible scheduling patterns
+**Built with ❤️ using Cloudflare Workers, AI, and modern web technologies**
 
-Each use case can be implemented by:
+[🚀 Try it now](https://python-dependency-resolver.bugzer.workers.dev) • [📚 Read the docs](./docs/) • [⭐ Star on GitHub](https://github.com/your-org/agents-starter)
 
-1. Adding relevant tools in `tools.ts`
-2. Customizing the UI for specific interactions
-3. Extending the agent's capabilities in `server.ts`
-4. Adding any necessary external API integrations
-
-## Learn More
-
-- [`agents`](https://github.com/cloudflare/agents/blob/main/packages/agents/README.md)
-- [Cloudflare Agents Documentation](https://developers.cloudflare.com/agents/)
-- [Cloudflare Workers Documentation](https://developers.cloudflare.com/workers/)
-
-## License
-
-MIT
+</div>
