@@ -230,7 +230,7 @@ function ResolutionResults({
               </svg>
             </div>
             <h3 className="text-2xl font-bold text-white mb-2">Analyzing Dependencies</h3>
-            <p className="text-gray-300">Our AI is working hard to resolve your packages...</p>
+            <p className="text-blue-200">Our AI is working hard to resolve your packages...</p>
           </div>
         </div>
         <div className="p-8">
@@ -290,7 +290,7 @@ function ResolutionResults({
             <span className="text-3xl">✅</span>
           </div>
           <h3 className="text-2xl font-bold text-white mb-2">Analysis Complete</h3>
-          <p className="text-gray-300">Your dependency analysis is ready</p>
+          <p className="text-green-200">Your dependency analysis is ready</p>
         </div>
       </div>
 
@@ -307,8 +307,8 @@ function ResolutionResults({
               onClick={() => setActiveTab(tab.key as any)}
               className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === tab.key
-                  ? "border-blue-500 text-blue-400"
-                  : "border-transparent text-gray-400 hover:text-gray-300"
+                  ? "border-blue-500 text-blue-300"
+                  : "border-transparent text-gray-200 hover:text-white"
               }`}
             >
               {tab.label}
@@ -327,25 +327,25 @@ function ResolutionResults({
                 <div className="text-3xl font-bold text-green-400 mb-2">
                   {report.result.resolved_packages?.length || 0}
                 </div>
-                <div className="text-gray-300 text-sm">Resolved Packages</div>
+                <div className="text-green-200 text-sm">Resolved Packages</div>
               </div>
               <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-xl p-6 text-center">
                 <div className="text-3xl font-bold text-yellow-400 mb-2">
                   {report.result.deprecated_packages?.length || 0}
                 </div>
-                <div className="text-gray-300 text-sm">Deprecated Packages</div>
+                <div className="text-yellow-200 text-sm">Deprecated Packages</div>
               </div>
               <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-6 text-center">
                 <div className="text-3xl font-bold text-red-400 mb-2">
                   {report.result.conflicts?.length || 0}
                 </div>
-                <div className="text-gray-300 text-sm">Conflicts</div>
+                <div className="text-red-200 text-sm">Conflicts</div>
               </div>
               <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-6 text-center">
                 <div className="text-3xl font-bold text-blue-400 mb-2">
                   {report.metadata?.processing_time_ms || 0}ms
                 </div>
-                <div className="text-gray-300 text-sm">Processing Time</div>
+                <div className="text-blue-200 text-sm">Processing Time</div>
               </div>
             </div>
 
@@ -365,7 +365,7 @@ function ResolutionResults({
                       <div className="font-mono text-green-400 font-medium">
                         {pkg.name}
                       </div>
-                      <div className="text-gray-300 text-sm">
+                      <div className="text-white text-sm">
                         Version: <span className="text-blue-400">{pkg.version}</span>
                       </div>
                     </div>
@@ -391,13 +391,13 @@ function ResolutionResults({
                         <span className="font-mono text-yellow-400 font-medium">
                           {pkg.name}
                         </span>
-                        <span className="text-gray-400 text-sm">{pkg.version}</span>
+                        <span className="text-yellow-200 text-sm">{pkg.version}</span>
                       </div>
-                      <p className="text-gray-300 text-sm mb-2">{pkg.reason}</p>
+                      <p className="text-white text-sm mb-2">{pkg.reason}</p>
                       {pkg.suggested_alternative && (
                         <div className="text-sm">
                           <span className="text-blue-400">💡 Alternative: </span>
-                          <span className="text-gray-300">
+                          <span className="text-white">
                             {pkg.suggested_alternative}
                           </span>
                         </div>
@@ -431,7 +431,7 @@ function ResolutionResults({
                   <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
                   <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                 </div>
-                <span className="text-gray-300 text-sm font-mono">requirements.txt</span>
+                <span className="text-white text-sm font-mono">requirements.txt</span>
               </div>
               <pre className="text-green-400 p-6 overflow-x-auto text-sm font-mono leading-relaxed">
                 {report.requirements_txt}
@@ -448,12 +448,12 @@ function ResolutionResults({
             </h4>
             <div className="bg-gray-800/30 rounded-xl p-6 border border-gray-700/30">
               <div
-                className="prose max-w-none text-gray-300"
+                className="prose max-w-none text-white"
                 dangerouslySetInnerHTML={{
                   __html: report.detailed_report
                     .replace(/\n/g, "<br/>")
                     .replace(/\*\*(.+?)\*\*/g, "<strong class='text-white'>$1</strong>")
-                    .replace(/\*(.+?)\*/g, "<em class='text-gray-400'>$1</em>")
+                    .replace(/\*(.+?)\*/g, "<em class='text-gray-300'>$1</em>")
                     .replace(/#{1,6}\s(.+)/g, "<h3 class='text-lg font-semibold text-white mt-4 mb-2'>$1</h3>"),
                 }}
               />
@@ -464,7 +464,7 @@ function ResolutionResults({
 
       {/* Footer */}
       <div className="border-t border-gray-700/50 px-8 py-4 bg-gray-800/30">
-        <div className="flex flex-wrap justify-between items-center text-sm text-gray-400">
+        <div className="flex flex-wrap justify-between items-center text-sm text-gray-200">
           <span className="flex items-center">
             <span className="mr-1">🐍</span>
             Python {report.metadata.python_version}
@@ -643,13 +643,6 @@ export default function App() {
                   <span className="group-hover:translate-x-1 transition-transform duration-300">→</span>
                 </span>
                 <div className="absolute inset-0 bg-gradient-to-r from-emerald-700 via-teal-700 to-green-800 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-              </button>
-              
-              <button className="group px-10 py-5 border-2 border-emerald-300 text-emerald-700 font-bold rounded-2xl hover:border-emerald-400 hover:text-emerald-800 hover:bg-emerald-50 transition-all duration-300 transform hover:scale-105 text-lg backdrop-blur-sm">
-                <span className="flex items-center gap-3">
-                  <span>💬</span>
-                  Contact Sales
-                </span>
               </button>
             </div>
 

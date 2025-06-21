@@ -52,6 +52,16 @@ export default function HeroSection() {
     }
   };
 
+  const scrollToBenefits = () => {
+    const benefitsSection = document.getElementById('benefits-section');
+    if (benefitsSection) {
+      benefitsSection.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+      });
+    }
+  };
+
   return (
     <div ref={containerRef} className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-orange-50 via-rose-50 to-pink-50">
       {/* Subtle background elements */}
@@ -96,7 +106,10 @@ export default function HeroSection() {
             <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
           </button>
           
-          <button className="group px-10 py-4 border-2 border-gray-300 text-gray-600 font-bold rounded-2xl hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all duration-300 transform hover:scale-105 text-lg">
+          <button 
+            onClick={scrollToBenefits}
+            className="group px-10 py-4 border-2 border-gray-300 text-gray-600 font-bold rounded-2xl hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all duration-300 transform hover:scale-105 text-lg"
+          >
             <span className="flex items-center gap-3">
               Learn More
             </span>

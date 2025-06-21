@@ -83,7 +83,7 @@ export default function BenefitsSection() {
   }, { scope: containerRef });
 
   return (
-    <div ref={containerRef} className="py-24 bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50">
+    <div id="benefits-section" ref={containerRef} className="py-24 bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50">
       <div className="container mx-auto px-6">
         {/* Section Title */}
         <div className="text-center mb-20">
